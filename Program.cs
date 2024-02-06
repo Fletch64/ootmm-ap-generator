@@ -45,6 +45,9 @@ public class Record
     public string AreaSetName { get; set; }
     [Optional]
     public bool AgeChange { get; set; }
+    [Optional]
+    public long ArchipelagoId { get; set; }
+
 }
 
 public class AreaSet
@@ -73,6 +76,8 @@ public class AreaSet
 
 class Program
 {
+    public static long offset = 362100;
+
     private static async Task<string> DownloadFileAsync(Uri url)
     {
         using var client = new HttpClient();
@@ -94,7 +99,7 @@ class Program
         var records = csv.GetRecords<Record>();
         foreach (var record in records)
         {
-            record.Key = game + "-" + record.Location;
+            record.Key = $"{record.Location} ({game})";
             record.Game = game;
             data.Add(record.Key, record);
             keys.Add(record.Key);
@@ -153,6 +158,13 @@ class Program
             await DownloadCsvFileAsync(new Uri(urlBase + file), game, csvData, keys);
         }
 
+        var currentId = offset;
+        foreach (var record in csvData.Values)
+        {
+            record.ArchipelagoId = currentId;
+            currentId++;
+        }
+
         var deserializer = new DeserializerBuilder()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
             .Build();
@@ -160,37 +172,54 @@ class Program
         {
             var yamlData = await DownloadFileAsync(new Uri(urlBase + file));
             var areaSets = deserializer.Deserialize<Dictionary<string, AreaSet>>(yamlData);
-            foreach (var areaSet in areaSets)
+            foreach (var (name, areaSet) in areaSets)
             {
-                var locations = areaSet.Value.Locations;
-                if (locations is null) { continue; }
+                var locations = areaSet.Locations;
+                if (locations is null) { 
+                    // Debug.WriteLine(name);
+                    continue;
+                }
 
                 foreach (var location in locations)
                 {
-                    var record = csvData[game + "-" + location.Key];
-                    record.AreaSetName = areaSet.Key;
-                    record.Region = areaSet.Value.Region;
-                    record.Dungeon = areaSet.Value.Dungeon;
+                    var record = csvData[$"{location.Key} ({game})"];
+                    record.AreaSetName = name;
+                    record.Region = areaSet.Region;
+                    record.Dungeon = areaSet.Dungeon;
                     record.Logic = location.Value;
                 }
             }
         }
 
+        var itemSet = new Dictionary<string, int>();
+        foreach (var (_, record) in csvData)
+        {
+            itemSet.TryGetValue(record.Item, out var count);
+            itemSet[record.Item] = count + 1;
+        }
+    
         foreach (var key in keys)
         {
             var record = csvData[key];
-            Debug.WriteLine($"Game:        {record.Game}");
-            Debug.WriteLine($"Location:    {record.Location}");
-            Debug.WriteLine($"Type:        {record.Type}");
-            Debug.WriteLine($"Hint:        {record.Hint}");
-            Debug.WriteLine($"AreaSetName: {record.AreaSetName}");
-            Debug.WriteLine($"Dungeon:     {record.Dungeon}");
-            Debug.WriteLine($"Scene:       {record.Scene}");
-            Debug.WriteLine($"Region:      {record.Region}");
-            Debug.WriteLine($"Id:          {record.Id}");
-            Debug.WriteLine($"Item:        {record.Item}");
-            Debug.WriteLine($"Logic:       {record.Logic}");
-            Debug.WriteLine("============");
+            Debug.WriteLine($"\"{record.Key}\": {record.ArchipelagoId}, ");
+            // Debug.WriteLine($"Game:        {record.Game}");
+            // Debug.WriteLine($"Location:    {record.Location}");
+            // Debug.WriteLine($"Type:        {record.Type}");
+            // Debug.WriteLine($"Hint:        {record.Hint}");
+            // Debug.WriteLine($"AreaSetName: {record.AreaSetName}");
+            // Debug.WriteLine($"Dungeon:     {record.Dungeon}");
+            // Debug.WriteLine($"Scene:       {record.Scene}");
+            // Debug.WriteLine($"Region:      {record.Region}");
+            // Debug.WriteLine($"Id:          {record.Id}");
+            // Debug.WriteLine($"Item:        {record.Item}");
+            // Debug.WriteLine($"Logic:       {record.Logic}");
+            // Debug.WriteLine($"Id:          {record.ArchipelagoId}");
+            // Debug.WriteLine("============");
+        }
+        foreach (var (item, count) in itemSet)
+        {
+            Debug.WriteLine($"\"{item}\"");
+            Debug.WriteLine($"\"{count}\"");
         }
     }
 }
