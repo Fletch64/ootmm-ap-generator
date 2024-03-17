@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="CsvHelper" Version="30.0.1" />
+    <PackageReference Include="Esprima" Version="3.0.4" />
     <PackageReference Include="YamlDotNet" Version="13.7.1" />
   </ItemGroup>
 
