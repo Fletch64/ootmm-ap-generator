@@ -83,8 +83,7 @@ partial class Program
 {
 
 
-    [GeneratedRegex("^[^<]*?<[^>]*>")]
-    private static partial Regex PrefixRegex();
+
 
     public static long offset = 362100;
 
@@ -202,42 +201,23 @@ partial class Program
             }
         }
 
-        var itemGenerator = new ItemGenerator();
-        var items = await itemGenerator.GetItems();
-        var itemId = offset;
-        foreach (var item in items)
-        {
-            if (!string.IsNullOrWhiteSpace(item.Name))
-            {
-                // Hack to remove articles and color codes.
-                var name = PrefixRegex().Replace(item.Name, "");
-                // Console.WriteLine($"\"{item.Id}\": OoTMMItemData(code={itemId}, name=\"{name}\", count={1}),");
-                itemId++;
-                // Debug.WriteLine($"Id:        {item.Id}");
-                // Debug.WriteLine($"Item:      {item.Item}");
-                // Debug.WriteLine($"Type:      {item.Type}");
-                // Debug.WriteLine($"Add:       {item.Add}");
-                // Debug.WriteLine($"Flags:     {item.Flags}");
-                // Debug.WriteLine($"Draw:      {item.Draw}");
-                // Debug.WriteLine($"Object:    {item.Object}");
-                // Debug.WriteLine($"Name:      {item.Name}");
-                // Debug.WriteLine("--------------------------------");
-            }
 
-        }
 
-        // var itemSet = new Dictionary<string, int>();
-        // foreach (var (_, record) in csvData)
-        // {
-        //     itemSet.TryGetValue(record.Item, out var count);
-        //     itemSet[record.Item] = count + 1;
-        // }
 
-        using var writer = new StreamWriter("locations.py");
+
+        using var writer = new StreamWriter("items.py");
         foreach (var key in keys)
         {
             var record = csvData[key];
             record.IsMasterQuest = record.Location.StartsWith("MQ ");
+            if (!record.IsMasterQuest)
+            {
+                // writer.WriteLine($"(\"{record.Key}\", OoTMMLocationData(region=\"{record.Scene}\", address={record.ArchipelagoId}, mq={record.IsMasterQuest}, type=\"{record.Type}\", logic=lambda : True)),");
+                // writer.WriteLine($"(\"{record.Key}\", OoTMMLocationData(region=\"{record.Scene}\", address={record.ArchipelagoId}), mq={record.IsMasterQuest}, type=\"{record.Type}\", logic=\"{record.Logic}\"),");
+                writer.WriteLine($"(\"{record.Key}\", OoTMMLocationData(region=\"OoTMM\", address={record.ArchipelagoId}, mq={record.IsMasterQuest}, type=\"{record.Type}\", game=\"{record.Game}\", id=\"{record.Id}\", name=\"{record.Location}\", logic=lambda : True)),");
+
+
+            }
             // writer.WriteLine($"\"{record.Key}\": {record.ArchipelagoId}, ");
             // writer.WriteLine($"Game:        {record.Game}");
             // writer.WriteLine($"Location:    {record.Location}");
@@ -255,15 +235,30 @@ partial class Program
             // writer.WriteLine($"MQ:          {record.IsMasterQuest}");
             // writer.WriteLine("============");
 
-            writer.WriteLine($"(\"{record.Key}\", OoTMMLocationData(region=\"{record.Scene}\", address={record.ArchipelagoId}), mq={record.IsMasterQuest}, type=\"{record.Type}\", logic=\"{record.Logic}\"),");
+            // writer.WriteLine($"(\"{record.Key}\", OoTMMLocationData(region=\"{record.Scene}\", address={record.ArchipelagoId}), mq={record.IsMasterQuest}, type=\"{record.Type}\", logic=\"{record.Logic}\"),");
+        }
+        var itemSet = new Dictionary<string, int>();
+        foreach (var (_, record) in csvData)
+        {
+            if (!record.IsMasterQuest)
+            {
+                itemSet.TryGetValue(record.Item, out var count);
+                itemSet[record.Item] = count + 1;
+            }
+
         }
 
-        // // var itemId = offset;
-        // // foreach (var (item, count) in itemSet)
-        // // {
-        // //     Console.WriteLine($"\"{item}\": OoTMMItemData(code={itemId}, count = {count}),");
-        // //     itemId++;
-        // //     // Debug.WriteLine($"\"{count}\"");
-        // // }
+        var itemId = offset;
+        foreach (var (item, count) in itemSet)
+        {
+
+            // writer.WriteLine($"\"{item}\": OoTMMItemData(code={itemId}, count={count}),");
+            itemId++;
+            // Debug.WriteLine($"\"{count}\"");
+        }
+        var itemGenerator = new ItemGenerator();
+        await itemGenerator.WriteItems(offset);
+
     }
+
 }

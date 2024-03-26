@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -20,7 +22,7 @@ class ItemData
     public string Name { get; set; }
 }
 
-class ItemGenerator
+partial class ItemGenerator
 {
     string urlBase = "https://raw.githubusercontent.com/OoTMM/OoTMM/master";
     string ItemsUrl = "/packages/data/src/defs/gi.yml";
@@ -43,4 +45,34 @@ class ItemGenerator
         using var response = await client.GetAsync(url);
         return await response.Content.ReadAsStringAsync();
     }
+    [GeneratedRegex("^[^<]*?<[^>]*>")]
+    private static partial Regex PrefixRegex();
+    public async Task  WriteItems(long offset)
+    {
+        var items = await GetItems();
+        
+        
+        var itemId = offset;
+        foreach (var item in items)
+        {
+            if (!string.IsNullOrWhiteSpace(item.Name))
+            {
+                // Hack to remove articles and color codes.
+                var name = PrefixRegex().Replace(item.Name, "");
+                // Console.WriteLine($"\"{item.Id}\": OoTMMItemData(code={itemId}, name=\"{name}\", count={1}),");
+                itemId++;
+                // Debug.WriteLine($"Id:        {item.Id}");
+                // Debug.WriteLine($"Item:      {item.Item}");
+                // Debug.WriteLine($"Type:      {item.Type}");
+                // Debug.WriteLine($"Add:       {item.Add}");
+                // Debug.WriteLine($"Flags:     {item.Flags}");
+                // Debug.WriteLine($"Draw:      {item.Draw}");
+                // Debug.WriteLine($"Object:    {item.Object}");
+                // Debug.WriteLine($"Name:      {item.Name}");
+                // Debug.WriteLine("--------------------------------");
+            }
+
+        }
+    }
 }
+
