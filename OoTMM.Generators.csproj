@@ -1,15 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net7</TargetFramework>
-    <ApplicationIcon />
-    <StartupObject />
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Corvus.UriTemplates" Version="1.2.4" />
     <PackageReference Include="CsvHelper" Version="30.0.1" />
     <PackageReference Include="Esprima" Version="3.0.4" />
+    <PackageReference Include="Microsoft.ClearScript.Complete" Version="7.4.5" />
+    <PackageReference Include="System.Linq.Async" Version="6.0.1" />
     <PackageReference Include="YamlDotNet" Version="13.7.1" />
   </ItemGroup>
 
