@@ -1,4 +1,11 @@
 bin/
 obj/
+
+[Oo]utput/
+[Ss]tubs/
+
+.vscode/**/*
+!.vscode/launch.json
+!.vscode/tasks.json
 .vs/
 .config/
