@@ -16,59 +16,57 @@ public partial class PythonWriter : TextWriter
     private readonly TextWriter? disposable;
     private bool newLine = true;
 
-    public override Encoding Encoding { get; } = new UTF8Encoding(false);
+    public override Encoding Encoding => writer.Encoding;
 
     public override IFormatProvider FormatProvider => writer.FormatProvider;
 
     public int Indent { get; set; }
 
     public PythonWriter(string path, PythonWriterSettings? settings = null)
-        : this(path, TextWriter.Null, settings) { }
+        : this(path, TextWriter.Null, settings)
+    {
+    }
 
     public PythonWriter(
         string path,
         TextWriter error,
-        PythonWriterSettings? settings = null
-    )
-        : this(new StreamWriter(path), error, path, true, settings) { }
+        PythonWriterSettings? settings = null)
+        : this(new StreamWriter(path), error, path, true, settings)
+    {
+    }
 
     public PythonWriter(Stream stream, PythonWriterSettings? settings = null)
-        : this(stream, TextWriter.Null, settings) { }
+        : this(stream, TextWriter.Null, settings)
+    {
+    }
 
     public PythonWriter(
         Stream stream,
         TextWriter error,
-        PythonWriterSettings? settings = null
-    )
+        PythonWriterSettings? settings = null)
         : this(
             new StreamWriter(
-                stream,
-                encoding: new UTF8Encoding(false),
-                leaveOpen: true
-            ),
-            error,
-            null,
-            true,
-            settings
-        ) { }
+                stream, encoding: new UTF8Encoding(false), leaveOpen: true),
+            error, null, true, settings)
+    {
+    }
 
     public PythonWriter(TextWriter output, PythonWriterSettings? settings = null)
-        : this(output, TextWriter.Null, settings) { }
+        : this(output, TextWriter.Null, settings)
+    {
+    }
 
     public PythonWriter(
         TextWriter output,
         TextWriter error,
-        PythonWriterSettings? settings = null
-    )
-        : this(output, error, null, false, settings) { }
+        PythonWriterSettings? settings = null)
+        : this(output, error, null, false, settings)
+    {
+    }
 
     private PythonWriter(
-        TextWriter output,
-        TextWriter error,
-        string? path,
-        bool closeOutput,
-        PythonWriterSettings? settings = null
-    )
+        TextWriter output, TextWriter error, string? path, bool closeOutput,
+        PythonWriterSettings? settings = null)
     {
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(error);
@@ -76,6 +74,7 @@ public partial class PythonWriter : TextWriter
         disposable = closeOutput ? output : null;
         settings ??= new();
 
+        var encoding = new UTF8Encoding(false);
         var start = new ProcessStartInfo()
         {
             FileName = "black",
@@ -83,20 +82,21 @@ public partial class PythonWriter : TextWriter
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            StandardInputEncoding = Encoding,
-            StandardOutputEncoding = Encoding,
-            StandardErrorEncoding = Encoding,
+            StandardInputEncoding = encoding,
+            StandardOutputEncoding = encoding,
+            StandardErrorEncoding = encoding,
         };
         foreach (var arg in GetArguments(settings, path))
         {
             start.ArgumentList.Add(arg);
         }
+
         start.ArgumentList.Add("-");
 
         process = new() { StartInfo = start };
 
-        process.OutputDataReceived += (s, e) => output.WriteLine(e.Data);
-        process.ErrorDataReceived += (s, e) =>
+        process.OutputDataReceived += (_, e) => output.WriteLine(e.Data);
+        process.ErrorDataReceived += (_, e) =>
         {
             var line = UnicodeEscape()
                 .Replace(
@@ -108,9 +108,8 @@ public partial class PythonWriter : TextWriter
                             : match.Groups[2].Value;
                         var codePoint = int.Parse(hex, NumberStyles.HexNumber);
                         return char.ConvertFromUtf32(codePoint);
-                    }
-                );
-            error.WriteLine(line);
+                    });
+            if (!string.IsNullOrWhiteSpace(line)) { error.WriteLine(line); }
         };
 
         process.Start();
@@ -127,16 +126,11 @@ public partial class PythonWriter : TextWriter
         if (newLine)
         {
             newLine = false;
-            for (int i = Indent * 4; i > 0; i--)
-            {
-                writer.Write(' ');
-            }
+            for (var i = Indent * 4; i > 0; i--) { writer.Write(' '); }
         }
+
         writer.Write(value);
-        if (value == '\n')
-        {
-            newLine = true;
-        }
+        if (value == '\n') { newLine = true; }
     }
 
     public override async Task WriteAsync(char value)
@@ -144,16 +138,11 @@ public partial class PythonWriter : TextWriter
         if (newLine)
         {
             newLine = false;
-            for (int i = Indent * 4; i > 0; i--)
-            {
-                await writer.WriteAsync(' ');
-            }
+            for (var i = Indent * 4; i > 0; i--) { await writer.WriteAsync(' '); }
         }
+
         await writer.WriteAsync(value);
-        if (value == '\n')
-        {
-            newLine = true;
-        }
+        if (value == '\n') { newLine = true; }
     }
 
     public sealed override async ValueTask DisposeAsync()
@@ -174,24 +163,22 @@ public partial class PythonWriter : TextWriter
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        if (disposing)
-        {
-            writer.Dispose();
-            process.WaitForExit();
-            disposable?.Dispose();
-            process.Dispose();
-        }
+        if (!disposing) { return; }
+
+        writer.Dispose();
+        process.WaitForExit();
+        disposable?.Dispose();
+        process.Dispose();
     }
 
     private static IEnumerable<string> GetArguments(
         PythonWriterSettings settings,
-        string? path
-    )
+        string? path)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentOutOfRangeException.ThrowIfNegative(settings.LineLength);
 
-        if (settings.BlackVersion is string black)
+        if (settings.BlackVersion is { } black)
         {
             yield return "--required-version";
             yield return black;
@@ -210,21 +197,15 @@ public partial class PythonWriter : TextWriter
             yield return settings.LineLength.ToString();
         }
 
-        if (settings.TargetVersion is string target)
+        if (settings.TargetVersion is { } target)
         {
             yield return "--target-version";
             yield return target;
         }
 
-        if (settings.Quiet)
-        {
-            yield return "--quiet";
-        }
+        if (settings.Quiet) { yield return "--quiet"; }
 
-        if (settings.SkipFirstLne)
-        {
-            yield return "--skip-source-first-line";
-        }
+        if (settings.SkipFirstLne) { yield return "--skip-source-first-line"; }
 
         if (settings.SkipStringNormalization)
         {
@@ -243,10 +224,10 @@ public partial class PythonWriter : TextWriter
 
 public record PythonWriterSettings
 {
-    public string? BlackVersion { get; init; } = null;
-    public string? File { get; init; } = null;
-    public int LineLength { get; init; } = 0;
-    public string? TargetVersion { get; init; } = null;
+    public string? BlackVersion { get; init; }
+    public string? File { get; init; }
+    public int LineLength { get; init; }
+    public string? TargetVersion { get; init; }
     public bool Quiet { get; init; } = true;
     public bool SkipFirstLne { get; init; } = false;
     public bool SkipStringNormalization { get; init; } = false;

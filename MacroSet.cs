@@ -11,15 +11,16 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace OoTMM.Generators;
 
+public record MacroStub(string Name, int ArgsMin, int ArgsMax);
+
 public class MacroSet
 {
-    private readonly string? typename = null;
-    private readonly MacroSet? parent = null;
-    private readonly List<string> keys = [];
-    private readonly Dictionary<string, FunctionExpression> macros = [];
-    private readonly SortedSet<string> missing = [];
+    private readonly string? typename;
 
-    public MacroSet() { }
+    private readonly MacroSet? parent;
+
+    private readonly Dictionary<string, FunctionExpression> macros = [];
+    private readonly Dictionary<string, MacroStub> missing = [];
 
     public MacroSet(string typename, MacroSet? parent = null)
     {
@@ -29,116 +30,54 @@ public class MacroSet
         this.parent = parent;
     }
 
-    public Statement Wrapper
-    {
-        get
-        {
-            if (TypeName is null)
-            {
-                return new EmptyStatement();
-            }
-
-            var constructor = new FunctionExpression(
-                new Identifier("__init__"),
-                NodeList.Create<Node>([new Identifier("state")]),
-                new BlockStatement(
-                    NodeList.Create<Statement>(
-                        [
-                            new ExpressionStatement(
-                                new CallExpression(
-                                    new StaticMemberExpression(
-                                        new CallExpression(
-                                            new Identifier("super"),
-                                            [],
-                                            false
-                                        ),
-                                        new Identifier("__init__"),
-                                        false
-                                    ),
-                                    NodeList.Create<Expression>(
-                                        [new Identifier("state")]
-                                    ),
-                                    false
-                                )
-                            )
-                        ]
-                    )
-                ),
-                false,
-                false,
-                false
-            );
-
-            var members = Enumerable
-                .Repeat(constructor, 1)
-                .Concat(Macros)
-                .Select(function => new MethodDefinition(
-                    function.Id!,
-                    false,
-                    function,
-                    PropertyKind.Method,
-                    false,
-                    new NodeList<Decorator>()
-                ));
-
-            return new ClassDeclaration(
-                new Identifier(TypeName),
-                parent?.TypeName is string super ? new Identifier(super) : null,
-                new ClassBody(NodeList.Create<ClassElement>(members)),
-                new NodeList<Decorator>()
-            );
-        }
-    }
-
     public MacroSet Root => parent?.Root ?? this;
 
-    public IEnumerable<string> Missing => Root.missing.AsEnumerable();
+    public IEnumerable<MacroStub> Missing => Root.missing.Values.OrderBy(m => m.Name);
 
-    private IEnumerable<FunctionExpression> Macros => keys.Select(key => macros[key]);
+    public IEnumerable<FunctionExpression> Macros =>
+        macros.OrderBy(m => m.Key).Select(m => m.Value);
 
     public string TypeName => typename ?? string.Empty;
 
     public static async ValueTask<MacroSet> CreateAsync(
         HttpClient client,
-        string uri,
+        string[] uris,
         string typename,
-        MacroSet? nested = null
-    )
+        MacroSet? nested = null)
     {
         ArgumentNullException.ThrowIfNull(client);
-        ArgumentNullException.ThrowIfNull(uri);
+        ArgumentNullException.ThrowIfNull(uris);
 
         var result = new MacroSet(typename, nested);
         var parser = new JavaScriptParser();
-        await foreach (var (name, expression) in Download(client, uri))
+        foreach (var uri in uris)
         {
-            var (identifier, arguments) = parser.ParseExpression(name) switch
+            await foreach (var (name, expression) in Download(client, uri))
             {
-                Identifier id => (id, new NodeList<Node>()),
-                CallExpression { Callee: Identifier id, Arguments: var args }
-                    => (id, NodeList.Create<Node>(args)),
-                _ => throw new NotImplementedException(),
-            };
-            result.keys.Add(identifier.Name);
-            result.macros.Add(
-                identifier.Name,
-                new FunctionExpression(
-                    identifier,
-                    arguments,
-                    new BlockStatement(
-                        NodeList.Create(
-                            Enumerable.Repeat<Statement>(
-                                new ReturnStatement(parser.ParseExpression(expression)),
-                                1
-                            )
-                        )
-                    ),
-                    false,
-                    false,
-                    false
-                )
-            );
+                var (identifier, arguments) = parser.ProcessExpression(name) switch
+                {
+                    Identifier id => (id, new NodeList<Node>()),
+                    CallExpression { Callee: Identifier id, Arguments: var args }
+                        => (id, NodeList.Create<Node>(args)),
+                    _ => throw new NotImplementedException(),
+                };
+                result.macros.Add(
+                    identifier.Name,
+                    new(
+                        identifier,
+                        arguments,
+                        new(
+                            NodeList.Create(
+                                Enumerable.Repeat<Statement>(
+                                    new ReturnStatement(
+                                        parser.ProcessExpression(expression)),
+                                    1))),
+                        false,
+                        false,
+                        false));
+            }
         }
+
         return result;
     }
 
@@ -152,42 +91,35 @@ public class MacroSet
             ? function.Params.Count == args
             : parent?.Has(macro, args, false) == true;
 
-        if (!found && force)
-        {
-            var argString = string.Join(
-                ", ",
-                Enumerable
-                    .Repeat("self", 1)
-                    .Concat(
-                        Enumerable.Range('a', args).Select(c => new string((char)c, 1))
-                    )
-            );
-            Root.missing.Add($"{macro}({argString})");
-            found = true;
-        }
+        if (found || !force) { return found; }
 
-        return found;
+        if (Root.missing.TryGetValue(macro, out var stub))
+        {
+            var newStub = stub with
+            {
+                ArgsMin = Math.Min(stub.ArgsMin, args),
+                ArgsMax = Math.Max(stub.ArgsMax, args),
+            };
+            Root.missing[macro] = newStub;
+        }
+        else { Root.missing.Add(macro, new(macro, args, args)); }
+
+        return true;
     }
 
     private static async IAsyncEnumerable<(string, string)> Download(
         HttpClient client,
-        string uri
-    )
+        string uri)
     {
         var deserializer = new DeserializerBuilder()
             .WithNamingConvention(CamelCaseNamingConvention.Instance)
             .Build();
-        using var stream = await client.GetStreamAsync(
-            new Uri(uri, UriKind.RelativeOrAbsolute)
-        );
+        await using var stream = await client.GetStreamAsync(
+            new Uri(uri, UriKind.RelativeOrAbsolute));
         using var reader = new StreamReader(stream);
         foreach (
             var (key, value) in deserializer.Deserialize<IDictionary<string, string>>(
-                reader
-            )
-        )
-        {
-            yield return (key, value);
-        }
+                reader)
+        ) { yield return (key, value); }
     }
 }

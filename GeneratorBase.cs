@@ -9,42 +9,40 @@ namespace OoTMM.Generators;
 
 internal class GeneratorBase
 {
-    public static PythonWriterSettings PythonSettings { get; set; } =
-        new PythonWriterSettings { LineLength = 120, TargetVersion = "py38" };
+    public PythonWriterSettings PythonSettings { get; set; } =
+        new() { LineLength = 120, TargetVersion = "py38" };
 
-    protected static ValueTask WriteGeneratedHeaderAsync(
-        TextWriter writer,
-        HttpClient client,
-        params string[] files
-    ) => WriteGeneratedHeaderAsync(writer, client, (IEnumerable<string>)files);
+    protected ValueTask WriteGeneratedHeaderAsync(
+        TextWriter writer, HttpClient client, params string[] files) =>
+        WriteGeneratedHeaderAsync(writer, client, (IEnumerable<string>)files);
 
-    protected static PythonWriter CreatePythonWriter(string path) =>
+    protected PythonWriter CreatePythonWriter(string path) =>
         new(path, Console.Error, PythonSettings);
 
-    protected static async ValueTask WriteGeneratedHeaderAsync(
-        TextWriter writer,
-        HttpClient client,
-        IEnumerable<string> files
-    )
+    protected string GetOutputPath(string path) => Path.Join(Program.OutputDir, path);
+
+    protected string GetStubPath(string path) => Path.Join(Program.StubsDir, path);
+
+    protected async ValueTask WriteGeneratedHeaderAsync(
+        TextWriter writer, HttpClient client, IEnumerable<string> files)
     {
-        if (!files.Any())
+        var filesArray = files.Order().ToArray();
+        if (filesArray.Length == 0)
         {
             throw new ArgumentException(
                 "At least one file must be provided",
-                nameof(files)
-            );
+                nameof(files));
         }
 
         await writer.WriteLineAsync(
             $"""
-            # -----------------------------------------------------------------------------
-            # This file was auto-generated from the following files from the OoTMM project:
-            #
-            # {client.BaseAddress}
-            #    {string.Join("\n#    ", files.Order())}
-            # -----------------------------------------------------------------------------
-            """
-        );
+             # -----------------------------------------------------------------------------
+             # This file was auto-generated from the following files from the OoTMM project:
+             #
+             # {client.BaseAddress}
+             #    {string.Join("\n#    ", filesArray)}
+             # -----------------------------------------------------------------------------
+             """);
         await writer.WriteLineAsync();
     }
 }
